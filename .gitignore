@@ -1,0 +1,10 @@
+# .gitignore の内容例
+venv/
+__pycache__/
+*.log
+.ssh/
+.bash*
+.config/
+.local/
+.vscode-server/
+.wget-hsts

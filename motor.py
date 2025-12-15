@@ -1,4 +1,4 @@
-\import time
+import time
 import board
 import digitalio
 import pwmio
