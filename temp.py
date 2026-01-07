@@ -25,7 +25,6 @@ pwmb = pwmio.PWMOut(board.D13, frequency=5000)
 def set_speed(motor, throttle):
     # throttle: 1.0(前進最大) 〜 -1.0(後退最大)
     duty = int(abs(throttle) * 65535)
-    
     if motor == 'A': # 左
         if throttle > 0:
             ain1.value = True
@@ -49,49 +48,12 @@ def set_speed(motor, throttle):
             bin1.value = False
             bin2.value = False
         pwmb.duty_cycle = duty
-
-# ==========================================
-# 2. テスト実行
-# ==========================================
 try:
-    print("\n1. 【左】タイヤだけが【前】に回りますか？ (3秒)")
-    set_speed('A', 0.5)  # 左 前進
-    set_speed('B', 0.0)  # 右 停止
-    time.sleep(3)
-    set_speed('A', 0.0)
-    time.sleep(1)
-
-    print("\n2. 【右】タイヤだけが【前】に回りますか？ (3秒)")
-    set_speed('A', 0.0)  # 左 停止
-    set_speed('B', 0.5)  # 右 前進
-    time.sleep(3)
-    set_speed('B', 0.0)
-    time.sleep(1)
 
     print("\n3. 【両方】が【前】に回りますか？ (3秒)")
     set_speed('A', 1.0)
     set_speed('B', 1.0)
-    time.sleep(3)
-
-    print("\n7. その場で右回転（左前進・右後退）しますか？ (3秒)")
-    set_speed('A', 0.5)
-    set_speed('B', -0.5)
-    time.sleep(3)
-    set_speed('A', 0)
-    set_speed('B', 0)
-    time.sleep(1)
-
-    print("\n8. その場で左回転（左後退・右前進）しますか？ (3秒)")
-    set_speed('A', -0.5)
-    set_speed('B', 0.5)
-    time.sleep(3)
-
-    print("\n6. 【両方】が【後】に回りますか？ (3秒)")
-    set_speed('A', -0.5)
-    set_speed('B', -0.5)
-    time.sleep(3)
-    set_speed('A', 0)
-    set_speed('B', 0)
+    time.sleep(5)
     time.sleep(1)
     print("\nテスト終了。停止します。")
     set_speed('A', 0)
