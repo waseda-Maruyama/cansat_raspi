@@ -16,45 +16,47 @@ import os
 TARGET_LATITUDE = 35.707068
 TARGET_LONGITUDE = 139.704465
 
-# 制御パラメータ
-KP_GAIN = 0.015
-GOAL_DISTANCE_METERS = 3.0
-BASE_SPEED = 0.5
+# ★屋内コードの設定を優先適用
+KP_GAIN = 0.004        # 旋回ゲイン
+BASE_SPEED = 0.1       # 基本速度 (遅い場合は0.3程度に上げてください)
+APPROACH_ANGLE = 20    # この角度以内なら前進、以外ならその場で旋回
+MOUNTING_OFFSET = -90.0 # センサー取り付けズレ補正
 
-# 制御間隔 (秒)
-ACTION_INTERVAL = 1.0
+GOAL_DISTANCE_METERS = 3.0 # ゴール判定距離
+ACTION_INTERVAL = 1.0      # 制御間隔
 
 # ログ保存先
-LOG_DIR = "/home/cansat/logs"
+LOG_DIR = "/home/yuki/cansat_raspi/navi/logs"
 os.makedirs(LOG_DIR, exist_ok=True)
-filename = f"{LOG_DIR}/mission_{int(time.time())}.csv"
+filename = f"{LOG_DIR}/navi_{int(time.time())}.csv"
 
 # ==========================================
-# 2. モーター設定 (修正版: 右D23)
+# 2. モーター設定 (屋内コードの設定を優先)
 # ==========================================
 print("モーター初期化中...")
 
-# 左モーター (A)
-ain1 = digitalio.DigitalInOut(board.D27)
-ain2 = digitalio.DigitalInOut(board.D17)
+# 左モーター (A) - ピン変更 D6, D5, D12
+ain1 = digitalio.DigitalInOut(board.D6)
+ain2 = digitalio.DigitalInOut(board.D5)
 ain1.direction = digitalio.Direction.OUTPUT
 ain2.direction = digitalio.Direction.OUTPUT
-pwma = pwmio.PWMOut(board.D18, frequency=5000)
+pwma = pwmio.PWMOut(board.D12, frequency=20000) # 周波数 20kHz
 
-# 右モーター (B) - GPIO23を使用
+# 右モーター (B) - ピン変更なし D22, D23, D13
 bin1 = digitalio.DigitalInOut(board.D22)
-bin2 = digitalio.DigitalInOut(board.D23) # 修正済み
+bin2 = digitalio.DigitalInOut(board.D23)
 bin1.direction = digitalio.Direction.OUTPUT
 bin2.direction = digitalio.Direction.OUTPUT
-pwmb = pwmio.PWMOut(board.D13, frequency=5000)
+pwmb = pwmio.PWMOut(board.D13, frequency=20000) # 周波数 20kHz
 
 def set_motor_speed(motor, throttle):
     throttle = max(-1.0, min(1.0, throttle))
     duty = int(abs(throttle) * 65535)
-    
+
     if motor == 'A':
-        ain1.value = (throttle > 0)
-        ain2.value = (throttle < 0)
+        # ★左モーター前後反転の修正を反映
+        ain1.value = (throttle < 0) # True/Falseを入れ替え
+        ain2.value = (throttle > 0)
         pwma.duty_cycle = duty
     elif motor == 'B':
         bin1.value = (throttle > 0)
@@ -70,13 +72,18 @@ def stop_motors():
 # ==========================================
 i2c = board.I2C()
 
-# 9軸センサ (BNO055)
+# 9軸センサ (BNO055) - アドレス自動判別
 sensor = None
 try:
     sensor = adafruit_bno055.BNO055_I2C(i2c, address=0x28)
+    print("✅ BNO055 接続成功 (0x28)")
 except:
-    try: sensor = adafruit_bno055.BNO055_I2C(i2c, address=0x29)
-    except: pass
+    try: 
+        sensor = adafruit_bno055.BNO055_I2C(i2c, address=0x29)
+        print("✅ BNO055 接続成功 (0x29)")
+    except: 
+        print("❌ BNO055が見つかりません")
+        pass
 
 # GPS (UART)
 uart = serial.Serial("/dev/serial0", baudrate=9600, timeout=10)
@@ -113,7 +120,6 @@ def normalize_angle_error(error):
 # ==========================================
 # 5. メインループ
 # ==========================================
-# CSVヘッダー書き込み (9軸のHeadingや日時を含める)
 with open(filename, "w") as f:
     f.write("Timestamp,Lat,Lon,Heading,Dist,TargetAngle,L_Speed,R_Speed,Fix\n")
 
@@ -121,85 +127,87 @@ print(f"計測開始: {filename}")
 print("GPS受信待機中...")
 
 last_action_time = 0
-has_reached_goal = False # ゴールしたかどうかのフラグ
+has_reached_goal = False
 
 try:
     while True:
-        # GPSデータ読み込み（常に実行）
         gps.update()
-        
         now_sys = time.time()
-        
-        # 制御・ログ保存タイミング (1秒に1回)
+
         if now_sys - last_action_time >= ACTION_INTERVAL:
             last_action_time = now_sys
-            
-            # 日時文字列 (例: 2023-12-15 12:00:00)
             timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             # --- データ取得 ---
             has_fix = gps.has_fix
             lat = gps.latitude if has_fix else 0
             lon = gps.longitude if has_fix else 0
-            
-            # 9軸データ (Heading)
+
+            # 9軸データ (Heading) + ★補正適用
             heading = 0
             if sensor:
                 try:
-                    h = sensor.euler[0]
-                    if h is not None: heading = h
+                    raw_h = sensor.euler[0]
+                    if raw_h is not None:
+                        # 補正を加えて 0-360 に正規化
+                        heading = (raw_h + MOUNTING_OFFSET) % 360
                 except: pass
-            
+
             # --- 制御ロジック ---
             dist, target_ang, l_val, r_val = 0, 0, 0, 0
-            
+
             if has_fix and lat != 0:
                 dist = calculate_distance_meters(lat, lon, TARGET_LATITUDE, TARGET_LONGITUDE)
                 target_ang = calculate_bearing(lat, lon, TARGET_LATITUDE, TARGET_LONGITUDE)
-                
-                # ★ ゴール判定 ★
-                # まだゴールしておらず、かつ距離内に入った場合
+
+                # ★ ゴール判定
                 if not has_reached_goal and dist < GOAL_DISTANCE_METERS:
-                    print("\n🎉🎉🎉 GOAL REACHED! (記録を継続します) 🎉🎉🎉\n")
-                    
-                    # CSVに区切り線を書き込む
+                    print("\n🎉 GOAL REACHED! 🎉\n")
                     with open(filename, "a") as f:
                         f.write(f"====================,GOAL REACHED at {timestamp_str},====================\n")
-                    
-                    has_reached_goal = True # フラグを立てる
-                    stop_motors() # モーター停止
-                
-                # --- モーター制御 ---
+                    has_reached_goal = True
+                    stop_motors()
+
+                # --- ★ここから屋内コードのロジック優先 ---
                 if has_reached_goal:
-                    # ゴール後はモーター停止のまま
                     l_val, r_val = 0, 0
                     stop_motors()
-                    print(f"[GOAL済] 現在地ログ継続: 残{dist:.1f}m")
+                    print(f"[GOAL済] 残{dist:.1f}m")
                 else:
-                    # まだゴールしていないなら走る
+                    # 1. ズレ計算
                     angle_diff = normalize_angle_error(target_ang - heading)
+                    
+                    # 2. 「近づいたら前進」ロジック
+                    if abs(angle_diff) < APPROACH_ANGLE:
+                        # 向きが合っている時だけ前進
+                        current_base = BASE_SPEED
+                    else:
+                        # 向きがズレている時はその場で旋回 (前進なし)
+                        current_base = 0.0
+
+                    # 3. 旋回量 (P制御)
                     turn = angle_diff * KP_GAIN
-                    l_val = BASE_SPEED - turn
-                    r_val = BASE_SPEED + turn
+                    
+                    # 4. 左右出力 (★符号を逆転修正済み: L+, R-)
+                    l_val = current_base + turn
+                    r_val = current_base - turn
+
                     set_motor_speed('A', l_val)
                     set_motor_speed('B', r_val)
-                    print(f"RUN: 残{dist:.1f}m | 向{heading:.0f}° | L:{l_val:.2f} R:{r_val:.2f}")
-            
+                    print(f"RUN: 残{dist:.1f}m | 向{heading:.0f}°(目{target_ang:.0f}°) | 差{angle_diff:.1f} | L:{l_val:.2f} R:{r_val:.2f}")
+
             else:
                 # GPSロスト時
                 print("📡 GPS検索中... (Motor Stop)")
                 stop_motors()
-            
-            # --- ログ保存 (日時, 9軸, GPS全て含む) ---
-            # フォーマット: 日時, 緯度, 経度, 9軸方角, 距離, 目標方角, 左出力, 右出力, Fix状態
+
+            # --- ログ保存 ---
             log_line = f"{timestamp_str},{lat},{lon},{heading:.2f},{dist:.2f},{target_ang:.2f},{l_val:.2f},{r_val:.2f},{int(has_fix)}\n"
-            
             with open(filename, "a") as f:
                 f.write(log_line)
                 f.flush()
                 os.fsync(f.fileno())
 
-        # 短いスリープ
         time.sleep(0.1)
 
 except KeyboardInterrupt:
