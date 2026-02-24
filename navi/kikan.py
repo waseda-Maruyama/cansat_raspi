@@ -1,0 +1,149 @@
+
+import time
+import sys
+import termios
+import tty
+import board
+import digitalio
+import pwmio
+
+# ==========================================
+# 1. モーター設定 (あなたの環境に合わせたピン配置)
+# ==========================================
+ain1 = digitalio.DigitalInOut(board.D6)
+ain2 = digitalio.DigitalInOut(board.D5)
+ain1.direction = digitalio.Direction.OUTPUT
+ain2.direction = digitalio.Direction.OUTPUT
+pwma = pwmio.PWMOut(board.D12, frequency=20000)
+
+bin1 = digitalio.DigitalInOut(board.D22)
+bin2 = digitalio.DigitalInOut(board.D23)
+bin1.direction = digitalio.Direction.OUTPUT
+bin2.direction = digitalio.Direction.OUTPUT
+pwmb = pwmio.PWMOut(board.D13, frequency=20000)
+
+def set_motor_speed(motor, throttle):
+    throttle = max(-1.0, min(1.0, throttle))
+    duty = int(abs(throttle) * 65535)
+
+    if motor == 'A':
+        ain1.value = (throttle > 0)
+        ain2.value = (throttle < 0)
+        pwma.duty_cycle = duty
+    elif motor == 'B':
+        bin1.value = (throttle > 0)
+        bin2.value = (throttle < 0)
+        pwmb.duty_cycle = duty
+
+def stop_motors():
+    set_motor_speed('A', 0)
+    set_motor_speed('B', 0)
+
+# ==========================================
+# 2. キーボード入力取得関数 (リアルタイム)
+# ==========================================
+def getch():
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+# ==========================================
+# 3. メインループ (キーボード操作)
+# ==========================================
+print("=========================================")
+print("🤖 起き上がりパターン模索ツール 🤖")
+print("=========================================")
+print(" [w] : 両輪 前進 (100%)")
+print(" [s] : 両輪 後退 (100%)")
+print(" [a] : 左旋回 (L後退 / R前進)")
+print(" [d] : 右旋回 (L前進 / R後退)")
+print(" [Space] : 停止 (急ブレーキ)")
+print("-----------------------------------------")
+print(" [1] : 左輪のみ 前進  |  [2] : 右輪のみ 前進")
+print(" [3] : 左輪のみ 後退  |  [4] : 右輪のみ 後退")
+print("-----------------------------------------")
+print(" [f] : 💥 フリップルーチン実行 (前後揺さぶり)")
+print(" [q] : 終了 (Quit)")
+print("=========================================")
+
+# 基本のパワー (起き上がりには勢いが必要なため高めに設定)
+PWR = 1.0
+
+try:
+    stop_motors()
+    while True:
+        key = getch()
+
+        if key == 'w':
+            print("\r↑ 前進        ", end="")
+            set_motor_speed('A', PWR)
+            set_motor_speed('B', PWR)
+        
+        elif key == 's':
+            print("\r↓ 後退        ", end="")
+            set_motor_speed('A', -PWR)
+            set_motor_speed('B', -PWR)
+        
+        elif key == 'a':
+            print("\r← 左旋回      ", end="")
+            set_motor_speed('A', -PWR)
+            set_motor_speed('B', PWR)
+        
+        elif key == 'd':
+            print("\r→ 右旋回      ", end="")
+            set_motor_speed('A', PWR)
+            set_motor_speed('B', -PWR)
+        
+        elif key == '1':
+            print("\r↖ 左前進のみ  ", end="")
+            set_motor_speed('A', PWR)
+            set_motor_speed('B', 0)
+            
+        elif key == '2':
+            print("\r↗ 右前進のみ  ", end="")
+            set_motor_speed('A', 0)
+            set_motor_speed('B', PWR)
+            
+        elif key == '3':
+            print("\r↙ 左後退のみ  ", end="")
+            set_motor_speed('A', -PWR)
+            set_motor_speed('B', 0)
+            
+        elif key == '4':
+            print("\r↘ 右後退のみ  ", end="")
+            set_motor_speed('A', 0)
+            set_motor_speed('B', -PWR)
+        
+        elif key == 'f':
+            # 起き上がるための振り子運動（揺さぶり）の自動化
+            print("\r💥 フリップルーチン開始！", end="")
+            for _ in range(3):
+                set_motor_speed('A', PWR)
+                set_motor_speed('B', PWR)
+                time.sleep(0.3)
+                set_motor_speed('A', -PWR)
+                set_motor_speed('B', -PWR)
+                time.sleep(0.3)
+            stop_motors()
+            print("\r停止          ", end="")
+
+        elif key == ' ':
+            print("\r■ 停止        ", end="")
+            stop_motors()
+        
+        elif key == 'q':
+            print("\r\n終了します。")
+            stop_motors()
+            break
+
+except Exception as e:
+    print(f"\nエラーが発生しました: {e}")
+finally:
+    stop_motors()
+    # ターミナルの設定を元に戻す（念のため）
+    termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, termios.tcgetattr(sys.stdin.fileno()))

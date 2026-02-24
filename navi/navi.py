@@ -18,9 +18,9 @@ TARGET_LONGITUDE = 139.704465
 
 # ★屋内コードの設定を優先適用
 KP_GAIN = 0.004        # 旋回ゲイン
-BASE_SPEED = 0.1       # 基本速度 (遅い場合は0.3程度に上げてください)
-APPROACH_ANGLE = 20    # この角度以内なら前進、以外ならその場で旋回
-MOUNTING_OFFSET = -90.0 # センサー取り付けズレ補正
+BASE_SPEED = 0.3       # 基本速度 (遅い場合は0.3程度に上げてください)
+APPROACH_ANGLE = 10    # この角度以内なら前進、以外ならその場で旋回
+MOUNTING_OFFSET = 0 # センサー取り付けズレ補正
 
 GOAL_DISTANCE_METERS = 3.0 # ゴール判定距離
 ACTION_INTERVAL = 1.0      # 制御間隔
