@@ -5,6 +5,7 @@ from digitalio import DigitalInOut, Direction
 
 # GPIO 4 (Pin 7) の設定
 NICROME_PIN = board.D4
+LED_PIN = board.D21  
 
 print("=== ニクロム線 加熱テスト (対話モード) ===")
 print("注意: 0.1Ωの場合、値は慎重に上げてください。")
@@ -15,6 +16,9 @@ try:
     # PWM初期化 (周波数100Hz)
     nicrome_pwm = pwmio.PWMOut(NICROME_PIN, frequency=100, duty_cycle=0)
 
+    led = DigitalInOut(LED_PIN)
+    led.direction = Direction.OUTPUT
+    led.value = False
     while True:
         user_input = input("\nデューティ比を入力 (0.01 〜 1.0) > ")
 
@@ -38,11 +42,13 @@ try:
             
             print(f"--> 出力開始: {duty_float*100:.1f}% ({duty_int})")
             
-            # 出力 ON
+            # 出力 ON 
+            led.value = True
             nicrome_pwm.duty_cycle = duty_int
             time.sleep(2.0) # 1秒間通電
             
             # 出力 OFF
+            led.value = False
             nicrome_pwm.duty_cycle = 0
             print("--> 停止。状態を確認してください。")
 
@@ -57,4 +63,7 @@ finally:
     if 'nicrome_pwm' in locals():
         nicrome_pwm.duty_cycle = 0
         nicrome_pwm.deinit()
+    if 'led' in locals():
+        led.value = False
+        led.deinit()
     print("PWMリソースを開放して終了しました。")

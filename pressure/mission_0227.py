@@ -5,6 +5,7 @@ import adafruit_dps310
 import os
 import sys
 from datetime import datetime
+from digitalio import DigitalInOut, Direction
 
 # ==========================================
 # 設定
@@ -16,14 +17,14 @@ WAIT_TIME = 0.1             # ループ間隔(秒)
 # 1. 機能有効化高度 (ARMING)
 #    この高さを超えるまでは、絶対にニクロム線は作動しません。
 #    地上での誤作動を防ぐため、ターゲット高度より高く設定してください。
-ARM_ALTITUDE = 5.0
+ARM_ALTITUDE = 12.0
 
 # 2. 作動高度 (TARGET)
 #    ARMED状態で、この高さを「下回ったら」加熱します。
-TARGET_ALTITUDE = 1.0
-
+TARGET_ALTITUDE = 10.0
 # --- ニクロム線設定 ---
 NICROME_PIN = board.D4
+LED_PIN = board.D21
 DUTY_CYCLE_PERCENT = 0.2    # 20%出力 (0.8Ωなら約4.6A)
 BURN_TIME = 3.0             # 3秒間加熱 (念のため少し長めに)
 
@@ -34,6 +35,10 @@ csv_file = f"{LOG_DIR}/flight_release_{datetime.now().strftime('%Y%m%d_%H%M%S')}
 
 # ニクロム線 初期化 (初期状態は必ずOFF)
 nicrome = pwmio.PWMOut(NICROME_PIN, frequency=100, duty_cycle=0)
+led = DigitalInOut(LED_PIN)
+led.direction = Direction.OUTPUT
+led.value = False
+
 
 # 状態フラグ
 is_armed = False  # 上空に到達したか？
@@ -83,7 +88,7 @@ except Exception as e:
 
 # CSVヘッダー
 with open(csv_file, 'w') as f:
-    f.write("Time,Pressure_hPa,Abs_Alt_m,Rel_Alt_m,State,Status_Message\n")
+    f.write("Time,Pressure_hPa,Temp_C,Abs_Alt_m,Rel_Alt_m,State,Status_Message\n")
 
 print("監視を開始します...")
 
@@ -92,6 +97,7 @@ try:
     while True:
         try:
             press = dps.pressure
+            temp = dps.temperature
             # 現在の絶対高度
             abs_alt = 44330 * (1.0 - (press / 1013.25) ** 0.1903)
             # 相対高度 (現在 - 基準)
@@ -127,11 +133,29 @@ try:
                     with open(csv_file, 'a') as f:
                         f.write(f"{datetime.now()},{press:.2f},{abs_alt:.2f},{rel_alt:.2f},{state_code},{status_msg}\n")
 
-                    # === 加熱実行 (ブロッキング) ===
+
+                    # === 加熱実行 (発火中もログを継続記録) ===
+                    led.value = True
                     nicrome.duty_cycle = int(65535 * DUTY_CYCLE_PERCENT)
-                    time.sleep(BURN_TIME)
-                    nicrome.duty_cycle = 0
                     
+                    burn_start = time.time()
+                    while time.time() - burn_start < BURN_TIME:
+                        # センサ値の更新
+                        press = dps.pressure
+                        temp = dps.temperature
+                        abs_alt = 44330 * (1.0 - (press / 1013.25) ** 0.1903)
+                        rel_alt = abs_alt - base_altitude
+                        
+                        # 燃焼中のログ保存と表示
+                        with open(csv_file, 'a') as f:
+                            f.write(f"{datetime.now()},{press:.2f},{temp:.2f},{abs_alt:.2f},{rel_alt:.2f},BURNING,Heating Nicrome...\n")
+                        print(f"[{datetime.now().strftime('%H:%M:%S')}] Alt: {rel_alt:6.2f}m | Temp: {temp:.1f}C | State: BURNING | Heating Nicrome...")
+                        time.sleep(WAIT_TIME)
+                        
+                    nicrome.duty_cycle = 0
+                    led.value = False
+                    
+
                     is_fired = True
                     print("✅ 加熱完了・停止")
                     status_msg = "Fired Successfully"
@@ -148,7 +172,7 @@ try:
 
             # ログ保存
             with open(csv_file, 'a') as f:
-                f.write(f"{datetime.now()},{press:.2f},{abs_alt:.2f},{rel_alt:.2f},{state_code},{status_msg}\n")
+                f.write(f"{datetime.now()},{press:.2f},{temp:.2f},{abs_alt:.2f},{rel_alt:.2f},{state_code},{status_msg}\n")
 
             # コンソール表示
             print(f"[{datetime.now().strftime('%H:%M:%S')}] Alt: {rel_alt:6.2f}m | State: {state_code} | {status_msg}")
@@ -162,7 +186,11 @@ except KeyboardInterrupt:
     print("\n停止")
 except Exception as e:
     print(f"エラー: {e}")
+# 変更後
 finally:
     nicrome.duty_cycle = 0
     nicrome.deinit()
+    if 'led' in locals():      # 追加: LEDの確実な消灯とリソース解放
+        led.value = False
+        led.deinit()
     print("Safe Shutdown")
