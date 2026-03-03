@@ -7,8 +7,8 @@ import adafruit_vl53l1x
 # --- 設定エリア ---
 # XSHUTピンのGPIO番号 (実際の配線に合わせて変更してください)
 # 例: Front=17, Rear=27 など
-XSHUT_FRONT_PIN = board.D17
-XSHUT_REAR_PIN  = board.D27
+XSHUT_FRONT_PIN = board.D27
+XSHUT_REAR_PIN  = board.D17
 
 # I2Cアドレスの設定 (Frontを変更し、Rearはデフォルトのままにする)
 ADDR_DEFAULT = 0x29
@@ -17,12 +17,17 @@ ADDR_REAR    = 0x29  # デフォルトのまま
 
 # --- 便利な関数: VL53L1Xのアドレスを変更する ---
 def change_address(sensor, new_address):
-    # レジスタ 0x0001 に新しいアドレス(7bit)を書き込む
-    # VL53L1Xのレジスタは16bitアドレス
+    """VL53L1XのI2Cアドレスを変更する（Adafruitライブラリ対応版）"""
+    print(f"アドレス変更前: {hex(sensor.i2c_device.device_address)}")
+    
+    # VL53L1Xのアドレス変更レジスタ (0x0001) に書き込み
     buf = bytearray([0x00, 0x01, new_address & 0x7F])
-    sensor._i2c_device.write(buf)
-    # Python側の通信アドレスも更新する
-    sensor._i2c_device.device_address = new_address & 0x7F
+    sensor.i2c_device.write(buf, end=3, stop=False)
+    
+    # Python側の通信アドレスも更新
+    sensor.i2c_device.device_address = new_address & 0x7F
+    print(f"アドレス変更完了: {hex(sensor.i2c_device.device_address)}")
+
 
 # 1. I2Cバスの準備
 i2c = busio.I2C(board.SCL, board.SDA)

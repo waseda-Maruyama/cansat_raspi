@@ -5,7 +5,7 @@ import digitalio
 import adafruit_vl53l1x
 
 # GPIO17 (XSHUT) の設定
-xshut = digitalio.DigitalInOut(board.D17)
+xshut = digitalio.DigitalInOut(board.D27)
 xshut.direction = digitalio.Direction.OUTPUT
 
 # リセット起動

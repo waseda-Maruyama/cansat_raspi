@@ -22,23 +22,27 @@ count = 0
 
 while True:
     try:
-        # データを取得
-        # sensor.euler は失敗時に None を返すことがあるため一度変数で受ける
-        euler = sensor.euler
-        
-        if euler:
+        euler = sensor.euler       # (heading, roll, pitch)
+        accel = sensor.acceleration  # (ax, ay, az) [m/s^2]
+        lin_accel = sensor.linear_acceleration  # 重力抜き [m/s^2]
+
+        if euler and accel and lin_accel:
             heading, roll, pitch = euler
-            
-            # 速度計測用
+            ax, ay, az = accel
+            lax, lay, laz = lin_accel
+
             count += 1
             now = time.monotonic()
             if now - last_time >= 1.0:
-                print(f"FPS: {count} | Heading: {heading} | Roll: {roll} | Pitch: {pitch}")
-                last_time = now
+                print(
+                  #  f"FPS: {count} | "
+                  #  f"Heading: {heading:.2f} Roll: {roll:.2f} Pitch: {pitch:.2f} | "
+                    f"Accel: ({ax:.2f}, {ay:.2f}, {az:.2f}) m/s^2 | "
+                  #  f"LinAcc: ({lax:.2f}, {lay:.2f}, {laz:.2f}) m/s^2"
+                )
                 count = 0
-        else:
-            # データが取れなかった場合（None）
-            pass
+                last_time = now
+
 
     except OSError as e:
         # I2C通信エラー（クロックストレッチなど）はよく起きるので
