@@ -1,3 +1,4 @@
+
 import time
 import sys
 import termios
@@ -21,45 +22,22 @@ bin1.direction = digitalio.Direction.OUTPUT
 bin2.direction = digitalio.Direction.OUTPUT
 pwmb = pwmio.PWMOut(board.D13, frequency=20000)
 
-current_speed_A=0
-current_speed_B=0
-MOTOR_B_SCALE=0.995015
 def set_motor_speed(motor, throttle):
-    global current_speed_A, current_speed_B
     throttle = max(-1.0, min(1.0, throttle))
+    duty = int(abs(throttle) * 65535)
+
     if motor == 'A':
-        current_speed_A = throttle
-        scaled_throttle = throttle  # Aはそのまま
-    elif motor == 'B':
-        current_speed_B = throttle
-        scaled_throttle = throttle * MOTOR_B_SCALE  # Bをスケーリング
-    else:
-        return  # 無効なモーター
-    duty = int(abs(scaled_throttle) * 65535)
-    if motor == 'A':
-        current_speed_A = throttle
         ain1.value = (throttle > 0)
         ain2.value = (throttle < 0)
         pwma.duty_cycle = duty
     elif motor == 'B':
-        current_speed_B = throttle
         bin1.value = (throttle > 0)
         bin2.value = (throttle < 0)
         pwmb.duty_cycle = duty
 
-def stop_motors(duration=0.5, steps=10):
-    global current_speed_A, current_speed_B
-    start_A = current_speed_A
-    start_B = current_speed_B
-    if start_A == 0.0 and start_B == 0.0:
-        return
-    for i in range(1, steps + 1):
-        ratio = 1.0 - (i / steps)
-        set_motor_speed('A', start_A * ratio)
-        set_motor_speed('B', start_B * ratio)
-        time.sleep(duration / steps)
-    set_motor_speed('A', 0.0)
-    set_motor_speed('B', 0.0)
+def stop_motors():
+    set_motor_speed('A', 0)
+    set_motor_speed('B', 0)
 
 # ==========================================
 # 2. キーボード入力取得関数 (リアルタイム)
@@ -94,14 +72,13 @@ print(" [q] : 終了 (Quit)")
 print("=========================================")
 
 # 基本のパワー (起き上がりには勢いが必要なため高めに設定)
-PWR =1.0
+PWR = 1.0
 
 
 
-try:
-    stop_motors()
-    while True:
-        key = getch()
+
+try: stop_motors() while True: exit key 
+= getch()
 
         if key == 'w':
             print("\r↑ 前進        ", end="")

@@ -94,9 +94,9 @@ def main():
     lost_counter = 0  # 連続で見失った回数をカウントする変数
     
     # パワー設定
-    SEARCH_PWR = 0.5
-    TURN_PWR = 0.3
-    DRIVE_PWR = 0.8
+    SEARCH_PWR = 1.0
+    TURN_PWR = 0.9
+    DRIVE_PWR = 1.0
     
     print("====================================")
     print("🚀 自律追従システム (Stop & Go方式) 起動")
@@ -126,8 +126,8 @@ def main():
                 else:
                     # \r を使って同じ行を上書きし、ログが埋まるのを防ぐ
                     print("\r🔄 周囲をスキャン中... (右へ旋回)", end="")
-                    set_motor_speed('A',-SEARCH_PWR)
-                    set_motor_speed('B', SEARCH_PWR)
+                    set_motor_speed('A',SEARCH_PWR)
+                    set_motor_speed('B', -SEARCH_PWR)
                     time.sleep(0.2)
                     stop_motors()
                     time.sleep(0.5)
@@ -147,18 +147,18 @@ def main():
                 # 見えた場合はカウンターをリセット
                 lost_counter = 0
                 
-                if cx < 0.30:
+                if cx < 0.2:
                     print(f"\r👈 左にズレている (位置:{cx:.2f}) -> ちょい左旋回   ", end="")
                     set_motor_speed('A', -TURN_PWR)
                     set_motor_speed('B', TURN_PWR)
-                    time.sleep(0.1)
+                    time.sleep(0.3)
                     stop_motors()
                     time.sleep(0.3)
-                elif cx > 0.55:
+                elif cx > 0.8:
                     print(f"\r👉 右にズレている (位置:{cx:.2f}) -> ちょい右旋回   ", end="")
                     set_motor_speed('A', TURN_PWR)
                     set_motor_speed('B', -TURN_PWR)
-                    time.sleep(0.1)
+                    time.sleep(0.3)
                     stop_motors()
                     time.sleep(0.3)
                 else:
@@ -172,9 +172,9 @@ def main():
                 print("🚀 直進ダーッシュ！！！")
                 set_motor_speed('A', DRIVE_PWR)
                 set_motor_speed('B', DRIVE_PWR)
-                time.sleep(1.0)
+                time.sleep(5.0)
                 stop_motors()
-                time.sleep(0.5)
+                time.sleep(1.0)
                 
                 current_state = STATE_ALIGN
 

@@ -28,11 +28,11 @@ def set_speed(motor, throttle):
     
     if motor == 'A': # 左
         if throttle > 0:
-            ain1.value = False
-            ain2.value = True
-        elif throttle < 0:
             ain1.value = True
             ain2.value = False
+        elif throttle < 0:
+            ain1.value = False
+            ain2.value = True
         else:
             ain1.value = False
             ain2.value = False

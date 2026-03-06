@@ -22,8 +22,8 @@ from digitalio import DigitalInOut, Direction
 # ==========================================
 
 # 目標地点 
-TARGET_LATITUDE = 30.374385
-TARGET_LONGITUDE = 130.960048
+TARGET_LATITUDE = 30.374321
+TARGET_LONGITUDE = 130.960611
 # 制御パラメータ
 KP_GAIN = 0.004        # 旋回ゲイン (調整ポイント)
 MAX_TURN = 0.35        # 旋回スピードの上限 (行き過ぎ防止)
@@ -147,8 +147,11 @@ except Exception as e:
 print("AIカメラ初期化中...")
 imx500 = IMX500("network.rpk")
 picam2 = Picamera2(imx500.camera_num)
-config = picam2.create_preview_configuration(main={"size": (640, 480)})
+config = picam2.create_preview_configuration(main={"size": (320, 240)})
 picam2.configure(config)
+picam2.start()
+print("カメラ暖機運転中...")
+time.sleep(2.0) # ★追加: 電流スパイクを分散させ、カメラを安定させる
 
 # 既存のパス設定を維持
 CALIB_FILE = "/home/yuki/cansat_raspi/bno_offsets.bin"
@@ -670,7 +673,7 @@ def phase2_gps_navigation():
     except KeyboardInterrupt:
         print("\n停止信号を受信 (Ctrl+C)")
         stop_motors(duration=1.0)
-	raise
+        raise
 
 
 # ==========================================
@@ -689,9 +692,9 @@ def phase3_ai_terminal():
     current_state = STATE_SCAN
     lost_counter = 0
     scan_counter = 0
-    SEARCH_PWR = 0.5
-    TURN_PWR = 0.3
-    DRIVE_PWR = 0.8
+    SEARCH_PWR = 1.0
+    TURN_PWR = 0.9
+    DRIVE_PWR = 1.0
     TOF_GOAL_LONG_THRESHOLD = 100
     TOF_GOAL_SHORT_THRESHOLD = 40
     
@@ -753,8 +756,8 @@ def phase3_ai_terminal():
 
                     # \r を使って同じ行を上書きし、ログが埋まるのを防ぐ
                     print("\r🔄 周囲をスキャン中... (右へ旋回)", end="")
-                    set_motor_speed('A',-SEARCH_PWR)
-                    set_motor_speed('B', SEARCH_PWR)
+                    set_motor_speed('A',SEARCH_PWR)
+                    set_motor_speed('B', -SEARCH_PWR)
 
             # ---------------------------------------------
             # 【モード2】アライン（真正面に向く）
@@ -775,14 +778,14 @@ def phase3_ai_terminal():
                     print(f"\r👈 左にズレている (位置:{cx:.2f}) -> ちょい左旋回   ", end="")
                     set_motor_speed('A', -TURN_PWR)
                     set_motor_speed('B', TURN_PWR)
-                    time.sleep(0.1)
+                    time.sleep(0.5)
                     stop_motors()
                     time.sleep(0.3)
                 elif cx > 0.55:
                     print(f"\r👉 右にズレている (位置:{cx:.2f}) -> ちょい右旋回   ", end="")
                     set_motor_speed('A', TURN_PWR)
                     set_motor_speed('B', -TURN_PWR)
-                    time.sleep(0.1)
+                    time.sleep(0.5)
                     stop_motors()
                     time.sleep(0.3)
                 else:
@@ -804,10 +807,10 @@ def phase3_ai_terminal():
 
     except KeyboardInterrupt:
         print("\nシステムを安全に停止します。")
-	raise
+        raise
     except Exception as e:
         print(f"\nエラーが発生しました: {e}")
-	raise
+        raise
     finally:
         stop_motors()
         picam2.stop()
@@ -840,3 +843,9 @@ if __name__ == "__main__":
     finally:
         stop_motors()
         # 必要に応じてカメラやLEDのリソース解放処理を追加
+        try:
+             picam2.stop()
+             picam2.close()
+             print("📷 カメラリソースを解放しました")
+        except:
+             pass
