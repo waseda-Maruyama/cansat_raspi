@@ -1,0 +1,3 @@
+Phase,Timestamp,State,Lat,Lon,Heading,TargetAngle,Dist,Roll,Pitch,L_Speed,R_Speed,Fix,RelAlt,AccelNorm,AI_CX,ToF_Dist
+2,2026-03-07 08:57:24,TURN,30.375376,130.960365,307.9,35.1,25.54,3,-12,0.00,1.00,1,0,0,,
+2,2026-03-07 08:57:25,TURN,30.375376,130.960365,306.8,35.1,25.54,5,-10,0.00,1.00,1,0,0,,
